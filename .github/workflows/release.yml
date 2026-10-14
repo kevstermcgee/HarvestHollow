@@ -1,0 +1,137 @@
+name: Publish reviewed Harvest Hollow Windows release
+on:
+  # Dispatch after reviewing the successful Windows build and its gameplay captures.
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful reviewed Windows build run ID
+        type: string
+        required: true
+      tag:
+        description: New immutable release tag
+        type: string
+        required: true
+        default: v0.1.0
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: harvest-hollow-release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Verify the exact successful Windows build
+        shell: python
+        run: |
+          import json, os, re, subprocess
+          from pathlib import Path
+          repository = os.environ['GITHUB_REPOSITORY']
+          run_id = os.environ['BUILD_RUN_ID']
+          tag = os.environ['RELEASE_TAG']
+          assert re.fullmatch(r'[1-9][0-9]*', run_id), 'Invalid build run ID'
+          assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', tag), 'Invalid release tag'
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', path], text=True))
+          workflow = api('repos/' + repository + '/actions/workflows/windows.yml')
+          build = api('repos/' + repository + '/actions/runs/' + run_id)
+          assert build['status'] == 'completed' and build['conclusion'] == 'success', 'Windows build did not complete successfully'
+          assert build['workflow_id'] == workflow['id'], 'Run is not the native Windows build workflow'
+          assert build['head_branch'] == 'main', 'Build must be from the release repository main branch'
+          assert build['repository']['full_name'] == repository, 'Build belongs to another repository'
+          assert build['head_repository']['full_name'] == repository, 'Build source belongs to another repository'
+          assert re.fullmatch(r'[0-9a-f]{40}', build['head_sha']), 'Build commit is invalid'
+          artifacts = api('repos/' + repository + '/actions/runs/' + run_id + '/artifacts?per_page=100')
+          matches = [artifact for artifact in artifacts['artifacts'] if artifact['name'] == 'harvest-hollow-windows-x64']
+          assert len(matches) == 1 and not matches[0]['expired'], 'Exact Windows build artifact is missing or expired'
+          Path('verified-build.json').write_text(json.dumps(build, indent=2) + '\n')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('BUILD_COMMIT=' + build['head_sha'] + '\n')
+          print('Verified successful native Windows workflow run ' + run_id + ' at ' + build['head_sha'])
+      - name: Download the exact reviewed Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: harvest-hollow-windows-x64
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          path: reviewed-artifact
+      - name: Verify published proof and installer bytes
+        shell: python
+        run: |
+          import hashlib, json, os, shutil
+          from pathlib import Path
+          root = Path('reviewed-artifact')
+          installers = list(root.rglob('harvest-hollow-setup-windows-x64.exe'))
+          proofs = list(root.rglob('native-release-proof.json'))
+          sums = list(root.rglob('SHA256SUMS.txt'))
+          assert len(installers) == len(proofs) == len(sums) == 1, 'Artifact must contain exactly one installer, proof and checksum file'
+          installer, proof_file, checksum_file = installers[0], proofs[0], sums[0]
+          proof = json.loads(proof_file.read_text(encoding='utf-8'))
+          assert proof['schema_version'] == 1
+          assert proof['name'] == 'Harvest Hollow'
+          assert proof['distribution'] == 'native-windows-x64-installer'
+          assert proof['source_repository'] == 'https://github.com/kevstermcgee/BlueEngine'
+          assert proof['source_revision'] == 'd4675097ce36237a79c274359cd0cf4c16fff5b9', 'Proof source differs from the reviewed source'
+          assert proof['build_status'] == 'success', 'Native release proof is not successful'
+          expected_run = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['BUILD_RUN_ID']
+          assert proof['build_run'] == expected_run, 'Proof belongs to a different build run'
+          required = {'native_x64_gui', 'c_runtime_linked_into_game', 'native_launch', 'isolated_graphical_smoke', 'installation_upgrade_uninstall_and_save_retention'}
+          checks = proof['checks']
+          assert isinstance(checks, dict) and required <= checks.keys(), 'Required native verification checks are absent'
+          assert all(value is True for value in checks.values()), 'A native verification check did not pass'
+          data = installer.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          assert data.startswith(b'MZ'), 'Installer is not a Windows executable'
+          assert proof['installer_file'] == installer.name
+          assert len(data) == proof['installer_bytes'], 'Installer byte count differs from the verified proof'
+          assert digest == proof['installer_sha256'], 'Installer SHA256 differs from the verified proof'
+          expected_checksum = digest + '  ' + installer.name
+          assert checksum_file.read_text(encoding='utf-8-sig').strip() == expected_checksum, 'Checksum file differs from the verified installer'
+          release = Path('release-assets')
+          release.mkdir()
+          for source in (installer, proof_file, checksum_file):
+              shutil.copy2(source, release / source.name)
+          print('Verified reviewed Windows installer: ' + str(len(data)) + ' bytes, SHA256 ' + digest)
+      - name: Publish immutable installer release
+        shell: python
+        run: |
+          import os, subprocess
+          from pathlib import Path
+          tag = os.environ['RELEASE_TAG']
+          repository = os.environ['GITHUB_REPOSITORY']
+          source = 'https://github.com/kevstermcgee/BlueEngine/tree/d4675097ce36237a79c274359cd0cf4c16fff5b9/games/harvest-hollow'
+          notes = '\n'.join([
+              'Harvest Hollow is an original cozy farming game made with BlueEngine.',
+              '',
+              '- Till soil, plant and water crops, harvest, chop trees, clear weeds and rocks, and build improvements.',
+              '- Change seeds, refill at the pond, ship your harvest, and sleep to grow the farm through changing days.',
+              '- Four original pastoral music tracks follow morning, afternoon, rain and evening.',
+              '- Compact HUD, a Farm drawer, and a neutral frame keep the farm visible.',
+              '',
+              'Download the Windows x64 installer below. Installation adds a Start Menu shortcut and offers a desktop shortcut. Saves and settings survive upgrades and uninstall.',
+              '',
+              '[Public game source](' + source + ') · [Project feedback](https://github.com/kevstermcgee/BlueEngine/blob/d4675097ce36237a79c274359cd0cf4c16fff5b9/games/harvest-hollow/FEEDBACK.md)',
+              '[Successful Windows verification](' + 'https://github.com/' + repository + '/actions/runs/' + os.environ['BUILD_RUN_ID'] + ')',
+              '',
+              'The attached native release proof and SHA256 checksum identify the exact verified installer.',
+              '',
+          ])
+          body = Path('release-notes.md')
+          body.write_text(notes, encoding='utf-8')
+          subprocess.run([
+              'gh', 'release', 'create', tag,
+              'release-assets/harvest-hollow-setup-windows-x64.exe',
+              'release-assets/SHA256SUMS.txt',
+              'release-assets/native-release-proof.json',
+              '--repo', repository,
+              '--target', os.environ['BUILD_COMMIT'],
+              '--title', 'Harvest Hollow ' + tag.removeprefix('v') + ' for Windows',
+              '--notes-file', str(body),
+              '--latest',
+          ], check=True)
