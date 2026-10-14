@@ -1,0 +1,181 @@
+name: Verify Harvest Hollow Windows EXE
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/windows.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: harvest-hollow-windows
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/engine/target
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve pinned public BlueEngine game source
+        uses: actions/checkout@v4
+        with:
+          repository: kevstermcgee/BlueEngine
+          ref: d4675097ce36237a79c274359cd0cf4c16fff5b9
+          path: engine
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine -> target
+          shared-key: harvest-hollow-windows
+          cache-on-failure: true
+      - name: Rules, deterministic snapshots and presentation checks
+        working-directory: engine
+        shell: bash
+        run: |
+          cargo fmt --manifest-path games/harvest-hollow/Cargo.toml --check
+          cargo test --locked --manifest-path games/harvest-hollow/Cargo.toml
+          cargo clippy --locked --all-targets --manifest-path games/harvest-hollow/Cargo.toml -- -D warnings
+          cargo build --locked --profile itest --no-default-features --bin be2-tools
+      - name: Render and verify the four original soundtrack scores
+        working-directory: engine
+        shell: python
+        run: |
+          import subprocess
+          from pathlib import Path
+          game = Path('games/harvest-hollow')
+          reports = game / '.blue-check/audio'
+          reports.mkdir(parents=True, exist_ok=True)
+          for bank in ['morning', 'afternoon', 'rain', 'evening']:
+              score = game / 'assets/audio-source' / (bank + '.json')
+              bundle = game / 'assets/audio' / bank
+              for command in [
+                  ['target/itest/be2-tools.exe', 'audio', 'validate', str(score)],
+                  ['target/itest/be2-tools.exe', 'audio', 'render', str(score), str(bundle)],
+                  ['target/itest/be2-tools.exe', 'audio', 'check', str(bundle)],
+              ]:
+                  subprocess.run(command, check=True)
+              result = subprocess.run(['python', 'tools/audio_report.py', str(bundle / 'preview-mix.wav'), '--loop', '--fail-on-issues', '--json'], check=True, capture_output=True, text=True)
+              (reports / (bank + '.json')).write_text(result.stdout)
+              (bundle / 'preview-mix.wav').unlink()
+      - name: Prepare pinned software OpenGL for Windows verification
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'mesa-ci.7z'
+          $mesa = Join-Path $env:RUNNER_TEMP 'mesa-ci'
+          Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695') { throw 'Mesa checksum mismatch' }
+          & 7z x $archive "-o$mesa" 'x64/*' -y
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa extraction failed' }
+          "BE2_CI_OPENGL_DIR=$(Join-Path $mesa 'x64')" >> $env:GITHUB_ENV
+      - name: Ship native package and verify shortcut, icon and isolated graphical launch
+        working-directory: engine
+        shell: python
+        run: |
+          import ctypes, os, runpy, sys
+          kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+          set_directory = kernel.SetDllDirectoryW
+          set_directory.argtypes = [ctypes.c_wchar_p]
+          set_directory.restype = ctypes.c_int
+          if not set_directory(os.environ['BE2_CI_OPENGL_DIR']):
+              raise ctypes.WinError(ctypes.get_last_error())
+          os.environ.update(GALLIUM_DRIVER='llvmpipe', LIBGL_ALWAYS_SOFTWARE='1')
+          folder = os.path.join(os.environ['RUNNER_TEMP'], 'Harvest-Hollow-shortcuts')
+          sys.argv = ['games/harvest-hollow/scripts/ship.py', 'ship', '--folder', folder, '--force']
+          try:
+              runpy.run_path(sys.argv[0], run_name='__main__')
+          finally:
+              if not set_directory(None):
+                  raise ctypes.WinError(ctypes.get_last_error())
+      - name: Validate project requirements and verified package
+        working-directory: engine
+        shell: pwsh
+        run: |
+          $folder = Join-Path $env:RUNNER_TEMP 'Harvest-Hollow-shortcuts'
+          python games/harvest-hollow/scripts/check.py --ship-folder $folder
+          if ($LASTEXITCODE -ne 0) { throw 'Game content check failed' }
+          python scripts/publish_games.py check
+          if ($LASTEXITCODE -ne 0) { throw 'Published-source check failed' }
+      - name: Verify native executable, all soundtrack banks and complete package
+        working-directory: engine
+        shell: python
+        run: |
+          import hashlib, json, os, struct, subprocess
+          from pathlib import Path
+          root = Path('games/harvest-hollow/dist')
+          stamp = json.loads((root / 'ship.json').read_text())
+          assert stamp['verified']['launch'] and stamp['verified']['smoke']
+          for name, digest in stamp['file_sha256'].items():
+              assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name
+          assert not list(root.rglob('*.wasm'))
+          banks = list((root / 'assets/audio').glob('*/bank.json'))
+          assert len(banks) >= 4, 'Four soundtrack banks must ship'
+          assert list((root / 'assets/audio').rglob('*.wav')), 'Rendered music must ship'
+          data = (root / 'harvest-hollow.exe').read_bytes()
+          offset = struct.unpack_from('<I', data, 0x3c)[0]
+          assert data[offset:offset+4] == b'PE\0\0'
+          assert struct.unpack_from('<H', data, offset + 4)[0] == 0x8664
+          assert struct.unpack_from('<H', data, offset + 24 + 68)[0] == 2
+          assert b'VCRUNTIME140' not in data.upper(), 'Game requires a separate Visual C++ runtime'
+          assert b'MSVCP140' not in data.upper(), 'Game requires a separate Visual C++ runtime'
+          source_revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          proof = {
+              'schema_version': 1,
+              'name': 'Harvest Hollow',
+              'distribution': 'native-windows-x64-installer',
+              'source_repository': 'https://github.com/kevstermcgee/BlueEngine',
+              'source_revision': source_revision,
+              'build_run': 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'],
+              'native_exe_sha256': hashlib.sha256(data).hexdigest(),
+              'runtime_files': stamp['file_sha256'],
+              'soundtrack_banks': [str(path.relative_to(root)).replace('\\', '/') for path in banks],
+              'checks': {'native_x64_gui': True, 'c_runtime_linked_into_game': True, 'native_launch': True, 'isolated_graphical_smoke': True},
+          }
+          (root.parent / 'native-release-proof.json').write_text(json.dumps(proof, indent=2) + '\n')
+          print('Verified native x64 GUI executable, complete music, declared files and graphical evidence.')
+      - name: Build per-user Windows x64 installer
+        working-directory: engine
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (!(Test-Path $iscc)) { choco install innosetup --no-progress -y }
+          if (!(Test-Path $iscc)) { throw 'Inno Setup compiler missing' }
+          & $iscc 'games/harvest-hollow/scripts/installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+          $exe = 'games/harvest-hollow/installers/harvest-hollow-setup-windows-x64.exe'
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  harvest-hollow-setup-windows-x64.exe" | Set-Content -Encoding ascii games/harvest-hollow/installers/SHA256SUMS.txt
+      - name: Verify installation, shortcuts, upgrades and save retention
+        working-directory: engine
+        shell: pwsh
+        run: games/harvest-hollow/scripts/test-installer.ps1
+      - name: Complete verified release proof
+        working-directory: engine
+        shell: python
+        run: |
+          import hashlib, json
+          from pathlib import Path
+          game = Path('games/harvest-hollow')
+          proof_file = game / 'native-release-proof.json'
+          proof = json.loads(proof_file.read_text())
+          installer = game / 'installers/harvest-hollow-setup-windows-x64.exe'
+          proof.update(installer_file=installer.name, installer_bytes=installer.stat().st_size, installer_sha256=hashlib.sha256(installer.read_bytes()).hexdigest())
+          proof['checks']['installation_upgrade_uninstall_and_save_retention'] = True
+          proof['build_status'] = 'success'
+          proof_file.write_text(json.dumps(proof, indent=2) + '\n')
+      - name: Retain installer, complete native package and verification captures
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: harvest-hollow-windows-x64
+          path: |
+            engine/games/harvest-hollow/installers/
+            engine/games/harvest-hollow/dist/
+            engine/games/harvest-hollow/.blue-check/
+            engine/games/harvest-hollow/native-release-proof.json
+          include-hidden-files: true
