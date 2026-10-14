@@ -49,6 +49,7 @@ jobs:
           import subprocess
           from pathlib import Path
           game = Path('games/harvest-hollow')
+          (game / 'assets/audio').mkdir(parents=True, exist_ok=True)
           reports = game / '.blue-check/audio'
           reports.mkdir(parents=True, exist_ok=True)
           for bank in ['morning', 'afternoon', 'rain', 'evening']:
