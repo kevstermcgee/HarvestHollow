@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: kevstermcgee/BlueEngine
-          ref: f06e03ba84e54fe2fa961a81492f10faf51d2566
+          ref: 63223a900bbce5a6d4b2e3b80a7aa733d862e080
           path: engine
       - name: Validate startup verifier syntax
         working-directory: engine
