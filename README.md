@@ -11,3 +11,5 @@ upgrades and save-preserving uninstall before an installer is published.
 
 Game source is maintained in `games/harvest-hollow` in
 [BlueEngine](https://github.com/kevstermcgee/BlueEngine).
+
+The next update opens fullscreen with a short BlueEngine Games studio card. Its Windows checks retain externally captured startup images and verify the first fullscreen toggle and the explicit `--windowed` override without using real player saves.

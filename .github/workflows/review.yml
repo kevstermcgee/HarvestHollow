@@ -62,12 +62,12 @@ jobs:
           assert proof['name'] == 'Harvest Hollow'
           assert proof['distribution'] == 'native-windows-x64-installer'
           assert proof['source_repository'] == 'https://github.com/kevstermcgee/BlueEngine'
-          assert proof['source_revision'] == 'd4675097ce36237a79c274359cd0cf4c16fff5b9', 'Proof source differs from the reviewed game source'
+          assert proof['source_revision'] == 'cb4aeba8e97a702a2620866758509dd9e491ab45', 'Proof source differs from the reviewed game source'
           assert proof['build_status'] == 'success', 'Native release proof is not successful'
           expected_run = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['BUILD_RUN_ID']
           assert proof['build_run'] == expected_run, 'Proof belongs to another build run'
           checks = proof['checks']
-          required = {'native_x64_gui', 'c_runtime_linked_into_game', 'native_launch', 'isolated_graphical_smoke', 'installation_upgrade_uninstall_and_save_retention'}
+          required = {'native_x64_gui', 'c_runtime_linked_into_game', 'native_launch', 'isolated_graphical_smoke', 'installation_upgrade_uninstall_and_save_retention', 'fullscreen_default', 'studio_card', 'fullscreen_toggle', 'explicit_windowed'}
           assert isinstance(checks, dict) and required <= checks.keys()
           assert all(value is True for value in checks.values()), 'A native verification check did not pass'
           game = proof_file.parent

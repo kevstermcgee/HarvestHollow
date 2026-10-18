@@ -11,7 +11,7 @@ on:
         description: New immutable release tag
         type: string
         required: true
-        default: v0.1.0
+        default: v0.1.1
 permissions:
   actions: read
   contents: write
@@ -77,11 +77,11 @@ jobs:
           assert proof['name'] == 'Harvest Hollow'
           assert proof['distribution'] == 'native-windows-x64-installer'
           assert proof['source_repository'] == 'https://github.com/kevstermcgee/BlueEngine'
-          assert proof['source_revision'] == 'd4675097ce36237a79c274359cd0cf4c16fff5b9', 'Proof source differs from the reviewed source'
+          assert proof['source_revision'] == 'cb4aeba8e97a702a2620866758509dd9e491ab45', 'Proof source differs from the reviewed source'
           assert proof['build_status'] == 'success', 'Native release proof is not successful'
           expected_run = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['BUILD_RUN_ID']
           assert proof['build_run'] == expected_run, 'Proof belongs to a different build run'
-          required = {'native_x64_gui', 'c_runtime_linked_into_game', 'native_launch', 'isolated_graphical_smoke', 'installation_upgrade_uninstall_and_save_retention'}
+          required = {'native_x64_gui', 'c_runtime_linked_into_game', 'native_launch', 'isolated_graphical_smoke', 'installation_upgrade_uninstall_and_save_retention', 'fullscreen_default', 'studio_card', 'fullscreen_toggle', 'explicit_windowed'}
           checks = proof['checks']
           assert isinstance(checks, dict) and required <= checks.keys(), 'Required native verification checks are absent'
           assert all(value is True for value in checks.values()), 'A native verification check did not pass'
@@ -105,10 +105,11 @@ jobs:
           from pathlib import Path
           tag = os.environ['RELEASE_TAG']
           repository = os.environ['GITHUB_REPOSITORY']
-          source = 'https://github.com/kevstermcgee/BlueEngine/tree/d4675097ce36237a79c274359cd0cf4c16fff5b9/games/harvest-hollow'
+          source = 'https://github.com/kevstermcgee/BlueEngine/tree/cb4aeba8e97a702a2620866758509dd9e491ab45/games/harvest-hollow'
           notes = '\n'.join([
               'Harvest Hollow is an original cozy farming game made with BlueEngine.',
               '',
+              '- Opens fullscreen with a brief BlueEngine Games studio card before the title screen; F/F11 switches to a window.',
               '- Till soil, plant and water crops, harvest, chop trees, clear weeds and rocks, and build improvements.',
               '- Change seeds, refill at the pond, ship your harvest, and sleep to grow the farm through changing days.',
               '- Four original pastoral music tracks follow morning, afternoon, rain and evening.',
@@ -116,7 +117,7 @@ jobs:
               '',
               'Download the Windows x64 installer below. Installation adds a Start Menu shortcut and offers a desktop shortcut. Saves and settings survive upgrades and uninstall.',
               '',
-              '[Public game source](' + source + ') · [Project feedback](https://github.com/kevstermcgee/BlueEngine/blob/d4675097ce36237a79c274359cd0cf4c16fff5b9/games/harvest-hollow/FEEDBACK.md)',
+              '[Public game source](' + source + ') · [Project feedback](https://github.com/kevstermcgee/BlueEngine/blob/cb4aeba8e97a702a2620866758509dd9e491ab45/games/harvest-hollow/FEEDBACK.md)',
               '[Successful Windows verification](' + 'https://github.com/' + repository + '/actions/runs/' + os.environ['BUILD_RUN_ID'] + ')',
               '',
               'The attached native release proof and SHA256 checksum identify the exact verified installer.',
