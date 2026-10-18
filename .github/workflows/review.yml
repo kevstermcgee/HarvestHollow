@@ -62,7 +62,7 @@ jobs:
           assert proof['name'] == 'Harvest Hollow'
           assert proof['distribution'] == 'native-windows-x64-installer'
           assert proof['source_repository'] == 'https://github.com/kevstermcgee/BlueEngine'
-          assert proof['source_revision'] == 'cb4aeba8e97a702a2620866758509dd9e491ab45', 'Proof source differs from the reviewed game source'
+          assert proof['source_revision'] == 'f06e03ba84e54fe2fa961a81492f10faf51d2566', 'Proof source differs from the reviewed game source'
           assert proof['build_status'] == 'success', 'Native release proof is not successful'
           expected_run = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['BUILD_RUN_ID']
           assert proof['build_run'] == expected_run, 'Proof belongs to another build run'

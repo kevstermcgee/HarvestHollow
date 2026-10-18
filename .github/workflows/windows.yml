@@ -21,8 +21,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: kevstermcgee/BlueEngine
-          ref: cb4aeba8e97a702a2620866758509dd9e491ab45
+          ref: f06e03ba84e54fe2fa961a81492f10faf51d2566
           path: engine
+      - name: Validate startup verifier syntax
+        working-directory: engine
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path tools/check_startup_windows.ps1).Path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count) { throw ($errors | Out-String) }
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

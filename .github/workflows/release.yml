@@ -77,7 +77,7 @@ jobs:
           assert proof['name'] == 'Harvest Hollow'
           assert proof['distribution'] == 'native-windows-x64-installer'
           assert proof['source_repository'] == 'https://github.com/kevstermcgee/BlueEngine'
-          assert proof['source_revision'] == 'cb4aeba8e97a702a2620866758509dd9e491ab45', 'Proof source differs from the reviewed source'
+          assert proof['source_revision'] == 'f06e03ba84e54fe2fa961a81492f10faf51d2566', 'Proof source differs from the reviewed source'
           assert proof['build_status'] == 'success', 'Native release proof is not successful'
           expected_run = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['BUILD_RUN_ID']
           assert proof['build_run'] == expected_run, 'Proof belongs to a different build run'
@@ -105,7 +105,7 @@ jobs:
           from pathlib import Path
           tag = os.environ['RELEASE_TAG']
           repository = os.environ['GITHUB_REPOSITORY']
-          source = 'https://github.com/kevstermcgee/BlueEngine/tree/cb4aeba8e97a702a2620866758509dd9e491ab45/games/harvest-hollow'
+          source = 'https://github.com/kevstermcgee/BlueEngine/tree/f06e03ba84e54fe2fa961a81492f10faf51d2566/games/harvest-hollow'
           notes = '\n'.join([
               'Harvest Hollow is an original cozy farming game made with BlueEngine.',
               '',
@@ -117,7 +117,7 @@ jobs:
               '',
               'Download the Windows x64 installer below. Installation adds a Start Menu shortcut and offers a desktop shortcut. Saves and settings survive upgrades and uninstall.',
               '',
-              '[Public game source](' + source + ') · [Project feedback](https://github.com/kevstermcgee/BlueEngine/blob/cb4aeba8e97a702a2620866758509dd9e491ab45/games/harvest-hollow/FEEDBACK.md)',
+              '[Public game source](' + source + ') · [Project feedback](https://github.com/kevstermcgee/BlueEngine/blob/f06e03ba84e54fe2fa961a81492f10faf51d2566/games/harvest-hollow/FEEDBACK.md)',
               '[Successful Windows verification](' + 'https://github.com/' + repository + '/actions/runs/' + os.environ['BUILD_RUN_ID'] + ')',
               '',
               'The attached native release proof and SHA256 checksum identify the exact verified installer.',
