@@ -8,7 +8,7 @@ on:
         type: string
         required: true
       tag:
-        description: New immutable release tag
+        description: Existing reviewed tag at the exact successful build commit
         type: string
         required: true
         default: v0.1.1
@@ -47,6 +47,14 @@ jobs:
           assert build['repository']['full_name'] == repository, 'Build belongs to another repository'
           assert build['head_repository']['full_name'] == repository, 'Build source belongs to another repository'
           assert re.fullmatch(r'[0-9a-f]{40}', build['head_sha']), 'Build commit is invalid'
+          # A reviewer creates the immutable tag with normal repository credentials.
+          # The automation only publishes it; it never needs workflow-write permission.
+          reference = api('repos/' + repository + '/git/ref/tags/' + tag)['object']
+          for _ in range(4):
+              if reference['type'] != 'tag':
+                  break
+              reference = api('repos/' + repository + '/git/tags/' + reference['sha'])['object']
+          assert reference['type'] == 'commit' and reference['sha'] == build['head_sha'], 'Existing release tag must identify the exact reviewed build commit'
           artifacts = api('repos/' + repository + '/actions/runs/' + run_id + '/artifacts?per_page=100')
           matches = [artifact for artifact in artifacts['artifacts'] if artifact['name'] == 'harvest-hollow-windows-x64']
           assert len(matches) == 1 and not matches[0]['expired'], 'Exact Windows build artifact is missing or expired'
@@ -131,7 +139,7 @@ jobs:
               'release-assets/SHA256SUMS.txt',
               'release-assets/native-release-proof.json',
               '--repo', repository,
-              '--target', os.environ['BUILD_COMMIT'],
+              '--verify-tag',
               '--title', 'Harvest Hollow ' + tag.removeprefix('v') + ' for Windows',
               '--notes-file', str(body),
               '--latest',
