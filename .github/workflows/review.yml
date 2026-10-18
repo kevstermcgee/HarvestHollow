@@ -97,3 +97,36 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+
+  startup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve the exact successful native package
+        uses: actions/download-artifact@v4
+        with:
+          name: harvest-hollow-windows-x64
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Prepare pinned software OpenGL
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'mesa-ci.7z'
+          $mesa = Join-Path $env:RUNNER_TEMP 'mesa-ci'
+          Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695') { throw 'Mesa checksum mismatch' }
+          & 7z x $archive "-o$mesa" 'x64/*' -y
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa extraction failed' }
+          "BE2_CI_OPENGL_DIR=$(Join-Path $mesa 'x64')" >> $env:GITHUB_ENV
+      - name: Capture ready game content after normal fullscreen and windowed startup
+        shell: pwsh
+        run: |
+          ./tools/check_startup_windows.ps1 -Executable candidate/dist/harvest-hollow.exe -ExpectedTitle 'Harvest Hollow' -OutputDirectory startup-evidence -OpenGLDirectory $env:BE2_CI_OPENGL_DIR
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: harvest-hollow-startup-evidence
+          path: startup-evidence/
+          if-no-files-found: warn
