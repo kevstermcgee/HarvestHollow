@@ -11,7 +11,7 @@ on:
         description: Existing reviewed tag at the exact successful build commit
         type: string
         required: true
-        default: v0.1.1
+        default: v0.1.2
 permissions:
   actions: read
   contents: write
@@ -85,7 +85,7 @@ jobs:
           assert proof['name'] == 'Harvest Hollow'
           assert proof['distribution'] == 'native-windows-x64-installer'
           assert proof['source_repository'] == 'https://github.com/kevstermcgee/BlueEngine'
-          assert proof['source_revision'] == '63223a900bbce5a6d4b2e3b80a7aa733d862e080', 'Proof source differs from the reviewed source'
+          assert proof['source_revision'] == 'c59dbfa2e25357428b09ec08d6c95130737dada8', 'Proof source differs from the reviewed source'
           assert proof['build_status'] == 'success', 'Native release proof is not successful'
           expected_run = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['BUILD_RUN_ID']
           assert proof['build_run'] == expected_run, 'Proof belongs to a different build run'
@@ -113,11 +113,12 @@ jobs:
           from pathlib import Path
           tag = os.environ['RELEASE_TAG']
           repository = os.environ['GITHUB_REPOSITORY']
-          source = 'https://github.com/kevstermcgee/BlueEngine/tree/63223a900bbce5a6d4b2e3b80a7aa733d862e080/games/harvest-hollow'
+          source = 'https://github.com/kevstermcgee/BlueEngine/tree/c59dbfa2e25357428b09ec08d6c95130737dada8/games/harvest-hollow'
           notes = '\n'.join([
               'Harvest Hollow is an original cozy farming game made with BlueEngine.',
               '',
-              '- Opens fullscreen with a brief BlueEngine Games studio card before the title screen; F/F11 switches to a window.',
+              '- Removes the retired Feta artwork; the BlueEngine Games studio card now uses simple centered text.',
+              '- Opens fullscreen before the title screen; F/F11 switches to a window.',
               '- Till soil, plant and water crops, harvest, chop trees, clear weeds and rocks, and build improvements.',
               '- Change seeds, refill at the pond, ship your harvest, and sleep to grow the farm through changing days.',
               '- Four original pastoral music tracks follow morning, afternoon, rain and evening.',
@@ -125,7 +126,7 @@ jobs:
               '',
               'Download the Windows x64 installer below. Installation adds a Start Menu shortcut and offers a desktop shortcut. Saves and settings survive upgrades and uninstall.',
               '',
-              '[Public game source](' + source + ') · [Project feedback](https://github.com/kevstermcgee/BlueEngine/blob/63223a900bbce5a6d4b2e3b80a7aa733d862e080/games/harvest-hollow/FEEDBACK.md)',
+              '[Public game source](' + source + ') · [Project feedback](https://github.com/kevstermcgee/BlueEngine/blob/c59dbfa2e25357428b09ec08d6c95130737dada8/games/harvest-hollow/FEEDBACK.md)',
               '[Successful Windows verification](' + 'https://github.com/' + repository + '/actions/runs/' + os.environ['BUILD_RUN_ID'] + ')',
               '',
               'The attached native release proof and SHA256 checksum identify the exact verified installer.',

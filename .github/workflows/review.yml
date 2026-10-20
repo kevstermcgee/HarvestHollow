@@ -6,7 +6,6 @@ on:
         description: Successful native Windows build run ID
         type: string
         required: true
-        default: '38506058861'
 permissions:
   actions: read
   contents: read
@@ -62,7 +61,7 @@ jobs:
           assert proof['name'] == 'Harvest Hollow'
           assert proof['distribution'] == 'native-windows-x64-installer'
           assert proof['source_repository'] == 'https://github.com/kevstermcgee/BlueEngine'
-          assert proof['source_revision'] == '63223a900bbce5a6d4b2e3b80a7aa733d862e080', 'Proof source differs from the reviewed game source'
+          assert proof['source_revision'] == 'c59dbfa2e25357428b09ec08d6c95130737dada8', 'Proof source differs from the reviewed game source'
           assert proof['build_status'] == 'success', 'Native release proof is not successful'
           expected_run = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['BUILD_RUN_ID']
           assert proof['build_run'] == expected_run, 'Proof belongs to another build run'
